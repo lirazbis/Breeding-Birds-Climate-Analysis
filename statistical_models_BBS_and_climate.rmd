@@ -1,0 +1,69 @@
+---
+title: "Statistical Models"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#Loading the libraries:
+library(tidyverse)
+library(tidyr)
+library(dplyr)
+library(stringr)
+library(sp)
+library(vegan)
+library(mvabund)
+library(lmerTest)
+```
+
+```{r}
+#Linear mixed effect models testing the effect of winter climate on population dynamics:
+lmer_Winter <- lmer(population_dynamic_measure ~ 
+                          mean_winter_temperature +
+                          winter_temperature_variability +
+                          mean_winter_precipitation +
+                          winter_precipitation_variability +
+                          (1|AOU), data = df, na.action = "na.fail", REML=F)
+r.squaredGLMM(lmer_Winter)
+summary(lmer_Winter)
+dredge(lmer_Winter)
+AIC(lmer_Winter)
+```
+
+```{r}
+#A loop that runs linear regression models for each species and aggregates the outputs to a table named 'WinterAOUs':
+
+AOUlist <- unique(df$AOU) #creating the species AOU list
+
+list_df <- vector(mode = "list", length = 18) 
+index <- 0 #setting index to zero
+
+for (i in AOUlist) {
+  index <- index + 1
+  AOU <- filter(df, AOU == i)
+  AOUlmW <- lm(population_dynamic_measure ~
+                          mean_winter_temperature +
+                          winter_temperature_variability +
+                          mean_winter_precipitation +
+                          winter_precipitation_variability +
+                 ,data=AOU)
+  SUMtable <- tidy(summary(AOUlmW))
+  AOUlmWconfint <- data.frame(confint(AOUlmW))
+  AOUlmWconfint <- tibble::rownames_to_column(AOUlmWconfint, "term")
+  merged <- merge(SUMtable, AOUlmWconfint, by = "term", all.x=TRUE)
+  list_df[[index]] <- merged
+  list_df[[index]] <- mutate(list_df[[index]], R_squared = summary(AOUlmW)$r.squared)
+  list_df[[index]] <- mutate(list_df[[index]], adj_R_squared = summary(AOUlmW)$adj.r.squared)
+  list_df[[index]] <- mutate(list_df[[index]], AOUname = i)
+  list_df[[index]] <- mutate(list_df[[index]], Season = "Winter")
+}
+
+WinterAOUs <- bind_rows(list_df)
+WinterAOUs$is_significant <- ifelse(WinterAOUs$p.value <= 0.01, WinterAOUs$p.value,"NotSignificant") #classifying p-values smaller than 0.01 as significant
+WinterAOUs <- merge(x= WinterAOUs, y= countSubsetDB_30_1, by.x = "AOUname", by.y="x", all.x=TRUE)
+WinterAOUs <- WinterAOUs %>% rename(NumberofTS = freq)
+head(WinterAOUs)
+```

@@ -1,0 +1,148 @@
+---
+title: "Working with BBS"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#Loading the libraries:
+library(tidyverse)
+library(tidyr)
+library(dplyr)
+library(stringr)
+library(sp)
+library(vegan)
+library(mvabund)
+library(ggplot2)
+library(ggthemes)
+
+#Set your working directory:
+setwd("C:/Liraz/BBS-R")
+dir <- getwd()
+```
+
+```{r}
+#Opening the data of all BBS states:
+Alabama <- read_csv(paste0(dir,"/Alabama.csv"))
+Alaska <- read_csv(paste0(dir,"/Alaska.csv"))
+Alberta <- read_csv(paste0(dir,"/Alberta.csv"))
+Arizona <- read_csv(paste0(dir,"/Arizona.csv"))
+Arkansa <- read_csv(paste0(dir,"/Arkansa.csv"))
+BritCol <- read_csv(paste0(dir,"/BritCol.csv"))
+Califor <- read_csv(paste0(dir,"/Califor.csv"))
+Connect <- read_csv(paste0(dir,"/Connect.csv"))
+Colorad <- read_csv(paste0(dir,"/Colorad.csv"))
+Delawar <- read_csv(paste0(dir,"/Delawar.csv"))
+Florida <- read_csv(paste0(dir,"/Florida.csv"))
+Georgia <- read_csv(paste0(dir,"/Georgia.csv"))
+Idaho <- read_csv(paste0(dir,"/Idaho.csv"))
+Illinoi <- read_csv(paste0(dir,"/Illinoi.csv"))
+Indiana <- read_csv(paste0(dir,"/Indiana.csv"))
+Iowa <- read_csv(paste0(dir,"/Iowa.csv"))
+Kansas <- read_csv(paste0(dir,"/Kansas.csv"))
+Kentuck <- read_csv(paste0(dir,"/Kentuck.csv"))
+Louisia <- read_csv(paste0(dir,"/Louisia.csv"))
+Maine <- read_csv(paste0(dir,"/Maine.csv"))
+Manitob <- read_csv(paste0(dir,"/Manitob.csv"))
+Marylan <- read_csv(paste0(dir,"/Marylan.csv"))
+Massach <- read_csv(paste0(dir,"/Massach.csv"))
+Michiga <- read_csv(paste0(dir,"/Michiga.csv"))
+Minneso <- read_csv(paste0(dir,"/Minneso.csv"))
+Mississ <- read_csv(paste0(dir,"/Mississ.csv"))
+Missour <- read_csv(paste0(dir,"/Missour.csv"))
+Montana <- read_csv(paste0(dir,"/Montana.csv"))
+NBrunsw <- read_csv(paste0(dir,"/NBrunsw.csv"))
+NCaroli <- read_csv(paste0(dir,"/NCaroli.csv"))
+NDakota <- read_csv(paste0(dir,"/NDakota.csv"))
+Nebrask <- read_csv(paste0(dir,"/Nebrask.csv"))
+Nevada <- read_csv(paste0(dir,"/Nevada.csv"))
+Newfoun <- read_csv(paste0(dir,"/Newfoun.csv"))
+NHampsh <- read_csv(paste0(dir,"/NHampsh.csv"))
+NJersey <- read_csv(paste0(dir,"/NJersey.csv"))
+NMexico <- read_csv(paste0(dir,"/NMexico.csv"))
+NovaSco <- read_csv(paste0(dir,"/NovaSco.csv"))
+Nunavut <- read_csv(paste0(dir,"/Nunavut.csv"))
+NWTerri <- read_csv(paste0(dir,"/NWTerri.csv"))
+NYork <- read_csv(paste0(dir,"/NYork.csv"))
+Ohio <- read_csv(paste0(dir,"/Ohio.csv"))
+Oklahom <- read_csv(paste0(dir,"/Oklahom.csv"))
+Ontario <- read_csv(paste0(dir,"/Ontario.csv"))
+Oregon <- read_csv(paste0(dir,"/Oregon.csv"))
+PEI <- read_csv(paste0(dir,"/PEI.csv"))
+Pennsyl <- read_csv(paste0(dir,"/Pennsyl.csv"))
+Quebec <- read_csv(paste0(dir,"/Quebec.csv"))
+RhodeIs <- read_csv(paste0(dir,"/RhodeIs.csv"))
+Saskatc <- read_csv(paste0(dir,"/Saskatc.csv"))
+SCaroli <- read_csv(paste0(dir,"/SCaroli.csv"))
+SDakota <- read_csv(paste0(dir,"/SDakota.csv"))
+Tenness <- read_csv(paste0(dir,"/Tenness.csv"))
+Texas <- read_csv(paste0(dir,"/Texas.csv"))
+Utah <- read_csv(paste0(dir,"/Utah.csv"))
+Vermont <- read_csv(paste0(dir,"/Vermont.csv"))
+Virgini <- read_csv(paste0(dir,"/Virgini.csv"))
+W_Virgi <- read_csv(paste0(dir,"/W_Virgi.csv"))
+Washing <- read_csv(paste0(dir,"/Washing.csv"))
+Wiscons <- read_csv(paste0(dir,"/Wiscons.csv"))
+Wyoming <- read_csv(paste0(dir,"/Wyoming.csv"))
+Yukon <- read_csv(paste0(dir,"/Yukon.csv"))
+
+#Binding the 62 data frames by rows:
+df_all_states <- rbind.data.frame(Alabama,Alaska,Alberta,Arizona,Arkansa,BritCol,Califor,Colorad,Connect,Delawar,Florida,Georgia,Idaho,Illinoi,Indiana,Iowa,Kansas,Kentuck,Louisia,Maine,Manitob,Marylan,Marylan,Massach,Michiga,Minneso,Mississ,Missour,Montana,NBrunsw,NCaroli,NDakota,Nebrask,Nevada,Newfoun,NHampsh,NJersey,NMexico,NovaSco,Nunavut,NWTerri,NYork,Ohio,Oklahom,Ontario,Oregon,PEI,Pennsyl,Quebec,RhodeIs,Saskatc,SCaroli,SDakota,Tenness,Texas,Utah,Vermont,Virgini,W_Virgi,Washing,Wiscons,Wyoming,Yukon)
+```
+
+```{r}
+#Keeping only routes that were sampled according to protocol, as indicated by the value '101' in the 'RPID' column:
+df_all_states <- df_all_states %>%
+  filter(RPID == "101")
+
+#Creating a unique site ID:
+df_all_states$Route <- str_pad(df_all_states$Route, width = 3, side = "left", pad = "0") #Converting the Route number to 3-digits
+df_all_states$siteID <- paste0(df_all_states$StateNum, df_all_states$Route)
+
+#Arranging observations chronologically per siteID:
+df_all_states <- df_all_states %>%
+  arrange(StateNum,Route,Year)
+```
+
+```{r}
+#Some basic continuations to begin from:
+#Counting the number of  years each species was present at each site:
+count_years <- df_all_states %>%
+  dplyr::group_by(siteID,AOU) %>%
+  summarise(n_years = n_distinct(Year))
+head(count_years)
+
+#Adding the year counts to the main table:
+df_all_states <- merge(df_all_states, count_years, by = c("AOU","siteID"), all.x=TRUE)
+colnames(df_all_states)
+
+#Summing the number of individuals of each species at each site:
+total_individuals <- df_all_states %>%
+  dplyr::group_by(siteID,AOU) %>%
+  summarise(TotalIndividuals = sum(SpeciesTotal))
+head(total_individuals)
+
+#Adding the sum of individuals at a site to the main table:
+df_all_states <- merge(df_all_states, total_individuals, by = c("AOU","siteID"), all.x=TRUE)
+head(df_all_states)
+
+#Calculating the yearly average individuals present at a site:
+df_all_states <- df_all_states %>%
+  dplyr::group_by(siteID,AOU) %>%
+  plyr::mutate(YearlyAverage = (TotalIndividuals/n_years))
+head(df_all_states)[,c(1,2,8,17,18)]
+
+ggplot(df_all_states, mapping = aes(x=StateNum, y= YearlyAverage)) + geom_point()
+
+df_all_states %>%
+  filter(YearlyAverage < 300) %>%
+  ggplot(mapping = aes(YearlyAverage)) + geom_histogram(binwidth = 10)
+
+head(df_all_states)
+```
+
+
+
