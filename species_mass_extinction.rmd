@@ -1,0 +1,142 @@
+---
+title: "Mass extinction"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#Loading the libraries:
+library(tidyverse)
+library(dplyr)
+library(httr)
+library(jsonlite)
+library(dplyr)
+```
+
+```{r}
+#Downloading 10 pages out if the IUCN red list:
+base <- "https://apiv3.iucnredlist.org/api/v3/species/"
+page <- "page/"
+page_number <- 0:10
+query <- "?token="
+token <- "9bb4facb6d23f48efbf424bb05c0c1ef1cf6f468393bc745d42179ac4aca5fee"
+
+url <- paste0(base,page,page_number,query,token)
+
+responses <- map(url, GET)
+responses
+```
+
+```{r}
+#Creating species_df table:
+contents <- map(responses, content, as = "text")
+
+species <- map(contents, fromJSON)
+
+species_df <- map_dfr(species, "result")
+
+view(species_df)
+```
+
+
+```{r}
+#Filtering extinct species:
+extinct <- species_df %>% filter(category == "EX")
+length(extinct$category) #922 species
+
+#Getting the narrative (the text that describes when the species went extinct) for each of the extinct species:
+extinctlist <- extinct$scientific_name
+
+base <- "https://apiv3.iucnredlist.org/api/v3/species/narrative/"
+name <- as.list(extinctlist)
+query <- "?token="
+token <- "9bb4facb6d23f48efbf424bb05c0c1ef1cf6f468393bc745d42179ac4aca5fee"
+
+urls <- paste0(base,name,query,token)
+length(urls) #922 urls
+
+resp <- map(urls, GET)
+text <- map(resp,content, as="text")
+json <- map(text, fromJSON)
+json_results <- map_dfr(json, "result")
+txt <- json_results$rationale #rationale is the text that describes when the species went extinct
+length(txt)
+
+#Extracted all the 4-digit numbers and 2-digit numbers that end with "th" (for example "16th" century).
+#Converting to character so that it can compare the "Xth century" to the numbered years, and then return the maximal value (assuming the last date written in the rationale is the year in which the species went extinct)
+extract_last_year <- function(thetxt){
+  all_years <- str_extract_all(thetxt, "\\d{4}|\\d{2}th century")#that line works
+  map_chr(all_years, ~ max(as.character(.)))
+}
+extract_last_year(txt)
+
+partialtxt <- txt[1:922]
+class(txt)
+
+extinct2 <- mutate(extinct, last_year = extract_last_year(partialtxt))
+extinct2 <- mutate(extinct2, rationale = partialtxt)
+head(extinct2)
+```
+
+```{r}
+#Creating a column with the century of extinction:
+extinct2 <- extinct2 %>% 
+  mutate(century = ifelse(substr(last_year, start=3, stop=3) == "t", as.numeric(substr(extinct2$last_year, start=1, stop=2)), as.numeric(substr(extinct2$last_year, start=1, stop=2)) + 1))
+
+extinct2 <- extinct2 %>%
+  mutate(new_century = case_when(century > 21 ~ 21, century <= 21 ~ century))
+
+extinct2$new_century <- replace_na(extinct2$new_century, "21")
+
+#Merging the extinct species table with the main "species_df" table:
+final_sp_data <- merge(species_df, extinct2[ , c("taxonid", "rationale", "last_year", "new_century")], by = "taxonid", all.x = TRUE)
+```
+
+```{r}
+class_count <- final_sp_data %>%
+  group_by(class_name) %>%
+  count() #to get the total number of rows for each class name
+
+final_sp_data <- merge(final_sp_data, class_count, by="class_name", all.x=TRUE)
+final_sp_data <- final_sp_data %>%
+  rename("class_count" = "n")
+
+#Counting the number of values per century:
+final_sp_data$new_century <- as.numeric(final_sp_data$new_century)
+
+sub_final_sp_data <- final_sp_data %>%
+  dplyr::select(class_name, new_century)
+
+tocumsum <- sub_final_sp_data %>%
+  group_by(class_name,new_century) %>%
+  count()
+
+finalcumsum <- tocumsum %>%
+  group_by(class_name) %>%
+  mutate(cumsum = cumsum(n))
+unique(finalcumsum)
+finalcumsum
+
+colnames(finalcumsum)
+
+finalcumsum <- merge(finalcumsum, class_count, by="class_name", all.x = TRUE)
+finalcumsum <- finalcumsum %>% 
+  rename("Total_number" = "n.y")
+
+finalcumsum <- mutate(finalcumsum, RelativeEX = (cumsum/Total_number)*100)
+```
+```{r}
+#Plotting relative cumulative extinctions of the five main classes:
+finalcumsum_phylum <- finalcumsum %>% 
+  filter(class_name %in% c("AMPHIBIA", "AVES", "MAMMALIA", "REPTILIA", "ACTINOPTERYGII"))
+
+ggplot(data=finalcumsum_phylum, mapping = aes(x=new_century, y=RelativeEX)) + 
+  geom_line(aes(color=class_name), size=1)+
+  labs(x="Century", y="Cumulative extinctions (% of total)") + 
+  ylim(0,2) + xlim(15,21)+
+  theme_classic()
+```
+
