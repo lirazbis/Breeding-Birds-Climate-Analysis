@@ -15,9 +15,9 @@ library(dplyr)
 library(stringr)
 library(sp)
 library(vegan)
-library(mvabund)
 library(lmerTest)
 library(lme4)
+library(broom)
 ```
 
 ```{r}
@@ -68,3 +68,4 @@ winter_AOUs <- merge(x= winter_AOUs, y= countSubsetDB_30_1, by.x = "AOUname", by
 winter_AOUs <- winter_AOUs %>% rename(NumberofTS = freq)
 head(winter_AOUs)
 ```
+

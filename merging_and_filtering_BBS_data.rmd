@@ -20,7 +20,7 @@ library(ggplot2)
 library(ggthemes)
 
 #Set your working directory:
-setwd("C:/Liraz/BBS-R")
+setwd("_")
 dir <- getwd()
 ```
 
@@ -143,6 +143,4 @@ df_all_states %>%
 
 head(df_all_states)
 ```
-
-
 
